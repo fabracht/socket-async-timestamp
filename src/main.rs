@@ -58,10 +58,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut read_buf = [0u8; 1024];
     let mut iov2 = [IoSliceMut::new(&mut read_buf)];
 
-    let mut rbuf1 = [0u8; 1024];
+    // let mut rbuf1 = [0u8; 1024];
     let mut rbuf2 = [0u8; 1024];
-    let mut iov3 = [IoSliceMut::new(&mut rbuf1)];
-    let _iov4 = [IoSliceMut::new(&mut rbuf2)];
+    // let mut iov3 = [IoSliceMut::new(&mut rbuf1)];
+    let mut iov4 = [IoSliceMut::new(&mut rbuf2)];
 
     loop {
         tokio::select! {
@@ -84,8 +84,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _tick = tokio::time::sleep(Duration::from_millis(500)) => {
                 // println!("Tick");
                 let i = atomic_i.load(Ordering::Relaxed);
-                if i == 5 {
+                if i == 3 {
                     continue;
+                    // In case you want the sending to last forever
+
                     // atomic_i
                     //     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| Some(n - n))
                     //     .unwrap();
@@ -94,21 +96,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let sbuf: Vec<u8> = (1u8..=i).map(|el| el).collect();
                 let iov1 = [IoSlice::new(&mut sbuf.as_slice())];
                 let _ = send_socket.write_to(&iov1, &send_sock_addr).await;
+                // Calling read here results in a deadlock
                 println!("Message {} sent", i);
                 atomic_i.fetch_add(1, Ordering::Relaxed);
             },
-            // read2 = send_socket.read(&mut iov4, MsgFlags::empty()) => {
-            //     match read2 {
-            //                     Ok(v) => println!("Send sock Received {} bytes in mes {:?}", v, iov4[0].iter().take(v).collect::<Vec<&u8>>()),
-            //                     Err(e) => println!("Send Err {:?}", e),
-            //                 }
-            // },
-            read1 = send_socket.read(&mut iov3, MsgFlags::MSG_ERRQUEUE) => {
-                match read1 {
-                                Ok(v) => println!("Send sock Received from Error queue {} bytes in mes {:?}", v, iov3[0].iter().take(v).collect::<Vec<&u8>>()),
+            read2 = send_socket.read(&mut iov4, MsgFlags::empty()) => {
+                match read2 {
+                                Ok(v) => {
+                                    println!("Send sock Received {} bytes in mes {:?}", v, iov4[0].iter().take(v).collect::<Vec<&u8>>());
+                                    // This second read call is done to retrieve any messages present in the Error queue (timestamps are there)
+                                    // match send_socket.read(&mut iov3, MsgFlags::MSG_ERRQUEUE).await {
+                                    //     Ok(v) => println!("Send sock Received from Error queue {} bytes in mes {:?}", v, iov3[0].iter().take(v).collect::<Vec<&u8>>()),
+                                    //     Err(e) => println!("Send Err {:?}", e),
+                                    // }
+                                 },
                                 Err(e) => println!("Send Err {:?}", e),
                             }
             },
+            // Adding this entry results in very inconsistent behavior for receiving Tx timestamps
+            // read1 = send_socket.read(&mut iov3, MsgFlags::MSG_ERRQUEUE) => {
+            //     match read1 {
+                                // Ok(v) => println!("Send sock Received from Error queue {} bytes in mes {:?}", v, iov3[0].iter().take(v).collect::<Vec<&u8>>()),
+                                // Err(e) => println!("Send Err {:?}", e),
+            //                 }
+            // },
 
         }
         println!("\n")

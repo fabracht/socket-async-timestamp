@@ -69,6 +69,7 @@ impl<'a, T> AsyncSocket<'a, T> {
         match guard.try_io(|inner| {
             let sys_time = nix::time::clock_gettime(nix::time::ClockId::CLOCK_REALTIME).unwrap();
             println!("Real clock {:?}", sys_time);
+            println!("FLAG = {:?}", flags);
             match nix::sys::socket::recvmsg::<()>(
                 inner.as_raw_fd(),
                 buffer,
